@@ -10,7 +10,13 @@ Each test suite becomes a test group.
 
 Using the Plugin
 -----
-1. This plugin is not yet available through Plugin Manager. It must be installed manually. To do this, Download the plugin and use the command 'mvn package'. This will create the hpi file (found in /testrail-plugin/target), which you can then upload to your Jenkins installation.
+
+1. This plugin is not yet available through Plugin Manager. It must be installed manually. To do this, Download the plugin and use the below command. This will create the *hpi* file (found in `/testrail-plugin/target`), which you can then upload to your Jenkins installation.
+
+```bash
+#!/bin/bash
+mvn package
+```
 
 2. Once you install the plugin, you must configure the TestRail user in your Global Settings. 
 ![Global Settings for the TestRail Notifier](global-settings.PNG)
@@ -22,10 +28,22 @@ Note you can also optionally define a Milestone that you are testing against.
 The Test Report XMLs is a comma separated list of XML files in the job workspace containing results to send to TestRail.
 ![Project Settings for the TestRail Notifier](job-settings.PNG)
 
+Pipeline Support
+-----
+
+To use this plugin in a pipeline, add the following to your jenkinsfile:
+
+```java
+testRail(testrailProject: <Project ID>, testrailSuite: <Suite ID>, 
+         junitResultsGlob: '<Junit results>', createNewTestcases:<true | false>])
+```
+
 Developers
 -----
+
 This is a Maven project. You'll need the following in your ~/.m2/settings.xml.
 
+```xml
     <settings>
       <pluginGroups>
         <pluginGroup>org.jenkins-ci.tools</pluginGroup>
@@ -58,24 +76,29 @@ This is a Maven project. You'll need the following in your ~/.m2/settings.xml.
         </mirror>
       </mirrors>
     </settings>
-    
+```
+
 To run on your development box you can just do
 
-    'mvn hpi:run'
-    
-That will build and start a Jenkins instance running at http://localhost:8080/jenkins. It will have the plugin installed but not configured.
+```bash
+#!/bin/bash
+mvn hpi:run
+```
 
+That will build and start a Jenkins instance running at http://localhost:8080/jenkins. It will have the plugin installed but not configured.
 
 And to build a package to install on your production Jenkins box
 
-    mvn clean package
-        
-That creates a .hpi file in the target directory. For more information about installing plugins, please see https://wiki.jenkins-ci.org/display/JENKINS/Plugins.
+```bash
+#!/bin/bash
+mvn clean package
+```
 
-
+That creates an .hpi file in the target directory. For more information about installing plugins, please see https://wiki.jenkins-ci.org/display/JENKINS/Plugins.
 
 License
 -------
+
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
 distributed with this work for additional information
