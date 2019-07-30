@@ -16,28 +16,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jenkinsci.plugins.testrail.TestRailObjects;
+package org.jenkinsci.plugins.testrail.TestRail;
 
 
 /**
  * Created by Drew on 3/24/2014.
  */
-public class Run {
-    private String suiteId;
-    private String id;
-    private String description;
-    private String milestoneId;
-    private String name;
+public class Case {
+    private int id;
+    private String title;
+    private int sectionId;
+    private String refs;
 
-    public void setSuiteId(String suiteId) { this.suiteId = suiteId; }
-    public void setId(String id) { this.id = id; }
-    public void setDescription(String description) { this.description = description; }
-    public void setMilestoneId(String mid) { this.milestoneId = mid; }
-    public void setName(String name) { this.name = name; }
+    public void setId(int id) {
+        this.id = id;
+    }
 
-    public String getSuiteId() { return this.suiteId; }
-    public String getId() { return this.id; }
-    public String getDescription() { return this.description; }
-    public String getMilestoneId() {return this.milestoneId; }
-    public String getName() { return this.name; }
+    public void setTitle(String title) {
+        this.title = title.trim();
+    }
+
+    public void setSectionId(int sectionId) { this.sectionId = sectionId; }
+
+    public void setRefs(String refs) {
+        this.refs = refs;
+    }
+
+    public int getId() {
+        return this.id;
+    }
+
+    public String getTitle() {
+        return this.title;
+    }
+
+    public int getSectionId() { return this.sectionId; }
+
+    public String getRefs() {
+        return this.refs;
+    }
 }

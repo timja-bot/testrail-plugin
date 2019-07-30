@@ -32,12 +32,12 @@ import hudson.util.FormValidation;
 import jenkins.tasks.SimpleBuildStep;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
-import org.jenkinsci.plugins.testrail.JunitResults.*;
+import org.jenkinsci.plugins.testrail.JUnit.*;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
-import org.jenkinsci.plugins.testrail.TestRailObjects.*;
+import org.jenkinsci.plugins.testrail.TestRail.*;
 
 import javax.annotation.Nonnull;
 import javax.servlet.ServletException;
@@ -52,27 +52,16 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
     private String junitResultsGlob;
     private String testrailMilestone;
     private boolean enableMilestone;
-    private String extraParameters;
-    private boolean useExistingRun;
-    private String testRun;
     private boolean createNewTestcases;
 
     // Fields in config.jelly must match the parameter names in the "DataBoundConstructor"
     @DataBoundConstructor
-    public TestRailNotifier(int testrailProject, int testrailSuite, String junitResultsGlob, String testrailMilestone, boolean enableMilestone, String extraParams, boolean createNewTestcases, boolean useExistingRun, String testRun) {
+    public TestRailNotifier(int testrailProject, int testrailSuite, String junitResultsGlob, String testrailMilestone, boolean enableMilestone, boolean createNewTestcases) {
         this.testrailProject = testrailProject;
         this.testrailSuite = testrailSuite;
         this.junitResultsGlob = junitResultsGlob;
         this.testrailMilestone = testrailMilestone;
         this.enableMilestone = enableMilestone;
-        this.extraParameters = extraParams;
-        this.createNewTestcases = createNewTestcases;
-        this.useExistingRun = useExistingRun;
-
-        if (testRun == null || testRun.isEmpty()) {
-            testRun = "0";
-        }
-        this.testRun = testRun;
         this.createNewTestcases = createNewTestcases;
     }
 
@@ -91,12 +80,6 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
     @DataBoundSetter
     public void setEnableMilestone(boolean mstone) {this.enableMilestone = mstone; }
     public boolean getEnableMilestone() { return  this.enableMilestone; }
-    public void setExtraParams(String params) { this.extraParameters = params; }
-    public String getExtraParams() { return this.extraParameters; }
-    public void setUseExistingRun(boolean newrun) { this.useExistingRun = newrun; }
-    public boolean getUseExistingRun() { return this.useExistingRun; }
-    public void setTestRun(String runId) { this.testRun = runId; }
-    public String getTestRun() { return this.testRun; }
     @DataBoundSetter
     public void setCreateNewTestcases(boolean newcases) {this.createNewTestcases = newcases; }
     public boolean getCreateNewTestcases() { return  this.createNewTestcases; }
@@ -130,7 +113,7 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
         }
 
         taskListener.getLogger().println("Munging test result files.");
-        Results results = new Results();
+        TestRailResults results = new TestRailResults();
 
         // FilePath doesn't have a read method. We want to actually process the files on the master
         // because during processing we talk to TestRail and slaves might not be able to.
@@ -155,9 +138,9 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
             taskListener.getLogger().println(e.getMessage());
             run.setResult(hudson.model.Result.FAILURE);
         }
-        List<Testsuite> suites = actualJunitResults.getSuites();
+        List<TestSuite> suites = actualJunitResults.getSuites();
         try {
-            for (Testsuite suite: suites) {
+            for (TestSuite suite: suites) {
                 results.merge(addSuite(suite, null, testCases));
             }
         } catch (Exception e) {
@@ -167,14 +150,13 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
 
         taskListener.getLogger().println("Uploading results to TestRail.");
         String runComment = "Automated results from Jenkins: " + workspace.toURI();
+        String milestoneId = testrailMilestone;
 
-        int runId = Integer.parseInt(testRun);
+        int runId = -1;
         TestRailResponse response = null;
         try {
-            if (!this.useExistingRun) {
-                runId = testrail.addRun(testCases.getProjectId(), testCases.getSuiteId(), testrailMilestone, runComment);
-            }
-            response = testrail.addResultsForCases(runId, results, this.extraParameters);
+            runId = testrail.addRun(testCases.getProjectId(), testCases.getSuiteId(), milestoneId, runComment);
+            response = testrail.addResultsForCases(runId, results);
         } catch (TestRailException e) {
             taskListener.getLogger().println("Error pushing results to TestRail");
             taskListener.getLogger().println(e.getMessage());
@@ -190,16 +172,14 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
             taskListener.getLogger().println("body :\n" + response.getBody());
         }
         try {
-            if (!this.useExistingRun) {
-                testrail.closeRun(runId);
-            }
+            testrail.closeRun(runId);
         } catch (Exception e) {
             taskListener.getLogger().println("Failed to close test run in TestRail.");
             taskListener.getLogger().println("EXCEPTION: " + e.getMessage());
         }
     }
 
-    public Results addSuite(Testsuite suite, String parentId, ExistingTestCases existingCases) throws IOException, TestRailException {
+    public TestRailResults addSuite(TestSuite suite, String parentId, ExistingTestCases existingCases) throws IOException, TestRailException {
         //figure out TR sectionID
         int sectionId;
         try {
@@ -215,16 +195,16 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
         }
 
         //if we have any subsections - process them
-        Results results = new Results();
+        TestRailResults results = new TestRailResults();
 
         if (suite.hasSuites()) {
-            for (Testsuite subsuite : suite.getSuites()) {
+            for (TestSuite subsuite : suite.getSuites()) {
                 results.merge(addSuite(subsuite, String.valueOf(sectionId), existingCases));
             }
         }
 
         if (suite.hasCases()) {
-            for (Testcase testcase : suite.getCases()) {
+            for (TestCase testcase : suite.getCases()) {
                 int caseId = 0;
                 boolean addResult = false;
                 try {
@@ -244,18 +224,14 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
 	                if (caseFailure != null) {
 	                    caseStatus = CaseStatus.FAILED;
 	                    caseComment = (caseFailure.getMessage() == null) ? caseFailure.getText() : caseFailure.getMessage() + "\n" + caseFailure.getText();
-	                } else if (testcase.getError() != null) {
-                        JunitError caseError = testcase.getError();
-                        caseStatus = CaseStatus.FAILED;
-                        caseComment = (caseError.getMessage() == null) ? caseError.getText() : caseError.getMessage() + "\n" + caseError.getText();
-                    } else if (testcase.getSkipped() != null) {
+	                } else if (testcase.getSkipped() != null) {
 	                    caseStatus = CaseStatus.UNTESTED;
 	                } else {
 	                    caseStatus = CaseStatus.PASSED;
 	                }
 
 	                if (caseStatus != CaseStatus.UNTESTED){
-	                    results.addResult(new Result(caseId, caseStatus, caseComment, caseTime));
+	                    results.addResult(new TestRailResult(caseId, caseStatus, caseComment, caseTime));
 	                }
 	            }
             }
@@ -352,9 +328,8 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
 
         public FormValidation doCheckJunitResultsGlob(@QueryParameter String value)
                 throws IOException, ServletException {
-            if (value.length() == 0) {
+            if (value.length() == 0)
                 return FormValidation.warning("Please select test result path.");
-            }
             // TODO: Should we check to see if the files exist? Probably not.
             return FormValidation.ok();
         }
@@ -366,7 +341,7 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
             }
             // TODO: There is probably a better way to do URL validation.
             if (!value.startsWith("http://") && !value.startsWith("https://")) {
-                return FormValidation.error("Host must be a valid URL.\nAre you missing the protocol?");
+                return FormValidation.error("Host must be a valid URL.");
             }
             testrail.setHost(value);
             testrail.setUser("");
@@ -413,20 +388,8 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
             return FormValidation.ok();
         }
 
-        public FormValidation doCheckExtraParameters(@QueryParameter String value) {
-            if (value == "" || (value.startsWith("{") && value.endsWith("}"))) {
-                return FormValidation.ok();
-            } else {
-                return FormValidation.error("Extra Parameters must be either an empty string or a valid JSON object.");
-            }
-        }
-
         public ListBoxModel doFillTestrailMilestoneItems(@QueryParameter int testrailProject) {
             ListBoxModel items = new ListBoxModel();
-            testrail.setHost(getTestrailHost());
-            testrail.setUser(getTestrailUser());
-            testrail.setPassword(getTestrailPassword());
-            
             items.add("None", "");
             try {
                 for (Milestone mstone : testrail.getMilestones(testrailProject)) {
@@ -435,22 +398,6 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
             } catch (ElementNotFoundException e) {
             } catch (IOException e) {
             }
-            return items;
-        }
-
-        public ListBoxModel doFillTestRunItems(@QueryParameter int testrailProject) {
-            ListBoxModel items = new ListBoxModel();
-            testrail.setHost(getTestrailHost());
-            testrail.setUser(getTestrailUser());
-            testrail.setPassword(getTestrailPassword());
-            
-            try {
-                for (Run run : testrail.getRuns(testrailProject)) {
-                    items.add(run.getName(), run.getId());
-                }
-            } catch (ElementNotFoundException e) {
-            } catch (IOException e) { }
-
             return items;
         }
 
@@ -463,7 +410,7 @@ public class TestRailNotifier extends Notifier implements SimpleBuildStep {
          * This human readable name is used in the configuration screen.
          */
         public String getDisplayName() {
-            return "Send results to Test Rail";
+            return "TestRail Plugin";
         }
 
         @Override

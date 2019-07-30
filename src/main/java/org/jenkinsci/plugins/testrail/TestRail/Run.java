@@ -16,13 +16,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jenkinsci.plugins.testrail.TestRailObjects;
+package org.jenkinsci.plugins.testrail.TestRail;
+
 
 /**
- * Created by Adam 'xirsoi' Chevalier on 4/28/2017.
+ * Created by Drew on 3/24/2014.
  */
-public class TestRailException extends Exception {
-    public TestRailException(String message) {
-        super(message);
-    }
+public class Run {
+    private int suiteId;
+    private int id;
+    private String description;
+    private String milestoneId;
+
+    public void setSuiteId(int suiteId) { this.suiteId = suiteId; }
+    public void setId(int id) { this.id = id; }
+    public void setDescription(String description) { this.description = description; }
+    public void setMilestoneId(String mid) { this.milestoneId = mid; }
+
+    public int getSuiteId() { return this.suiteId; }
+    public int getId() { return this.id; }
+    public String getDescription() { return this.description; }
+    public String getMilestoneId() {return this.milestoneId; }
 }

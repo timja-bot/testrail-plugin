@@ -26,20 +26,18 @@ import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
 
-import org.jenkinsci.plugins.testrail.JunitResults.Testcase;
-import org.jenkinsci.plugins.testrail.TestRailObjects.*;
+import org.jenkinsci.plugins.testrail.JUnit.TestCase;
+import org.jenkinsci.plugins.testrail.TestRail.*;
 
 import org.apache.commons.lang.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import javax.xml.ws.http.HTTPException;
+import org.apache.http.HttpException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.InterruptedException;
-import java.util.List;
-import java.util.Iterator;
 import static org.jenkinsci.plugins.testrail.Utils.*;
 /**
  * Created by Drew on 3/19/14.
@@ -108,19 +106,23 @@ public class TestRailClient {
     }
 
     private TestRailResponse httpPost(String path, String payload)
-        throws UnsupportedEncodingException, IOException, HTTPException, TestRailException {
+        throws UnsupportedEncodingException, IOException, TestRailException {
         TestRailResponse response;
 
-        do {
-            response = httpPostInt(path, payload);
-            if (response.getStatus() == 429) {
-                try {
-                    Thread.sleep(60000);
-                } catch (InterruptedException e) {
-                    log(e.toString());
+        try {
+            do {
+                response = httpPostInt(path, payload);
+                if (response.getStatus() == 429) {
+                    try {
+                        Thread.sleep(60000);
+                    } catch (InterruptedException e) {
+                        log(e.toString());
+                    }
                 }
-            }
-        } while (response.getStatus() == 429);
+            } while (response.getStatus() == 429);  
+        } catch (HttpException e) {
+            throw new TestRailException("Posting to " + path + " returned an error!", e);
+        }
 
         if (response.getStatus() != 200) {
             // any status code other than 200 is an error
@@ -130,7 +132,7 @@ public class TestRailClient {
     }
 
     private TestRailResponse httpPostInt(String path, String payload)
-            throws UnsupportedEncodingException, IOException, HTTPException {
+            throws UnsupportedEncodingException, IOException, HttpException {
         TestRailResponse result;
         PostMethod post = new PostMethod(host + "/" + path);
         HttpClient httpclient = setUpHttpClient(post);
@@ -168,24 +170,13 @@ public class TestRailClient {
     }
 
     public boolean authenticationWorks() throws IOException {
-        try {
-            TestRailResponse response = httpGet("/index.php?/api/v2/get_projects");
-            return (200 == response.getStatus());
-        } catch (Exception e) {
-            return false;
-        }
+        TestRailResponse response = httpGet("/index.php?/api/v2/get_projects");
+        return (200 == response.getStatus());
     }
 
     public Project[] getProjects() throws IOException, ElementNotFoundException {
         String body = httpGet("/index.php?/api/v2/get_projects").getBody();
-        JSONArray json;
-        try { // testrail will return a single object rather than an array if there
-              // is only one project
-            json = new JSONArray(body);
-        } catch (Exception e) {
-            json = new JSONArray();
-            json.put(new JSONObject(body));
-        }
+        JSONArray json = new JSONArray(body);
         Project[] projects = new Project[json.length()];
         for (int i = 0; i < json.length(); i++) {
             JSONObject o = json.getJSONObject(i);
@@ -230,32 +221,14 @@ public class TestRailClient {
         return suites;
     }
 
-    public Run[] getRuns(int projectId) throws IOException, ElementNotFoundException {
-        String body = httpGet("index.php?/api/v2/get_runs/" + projectId).getBody();
-
-        JSONArray json;
-
-        try {
-            json = new JSONArray(body);
-        } catch (JSONException e) {
-            throw new ElementNotFoundException("No runs for project " + projectId + "! Response from TestRail is: \n" + body);
-        }
-
-        Run[] runs = new Run[json.length()];
-        for (int i = 0; i < json.length(); i++) {
-            JSONObject o = json.getJSONObject(i);
-            runs[i] = createRunFromJson(o);
-        }
-
-        return runs;
-    }
-
     public String getCasesString(int projectId, int suiteId) {
         return "index.php?/api/v2/get_cases/" + projectId + "&suite_id=" + suiteId;
     }
 
     public Case[] getCases(int projectId, int suiteId) throws IOException, ElementNotFoundException {
-        String body = httpGet(getCasesString(projectId, suiteId)).getBody();
+        // "/#{project_id}&suite_id=#{suite_id}#{section_string}"
+        String body = httpGet("index.php?/api/v2/get_cases/" + projectId + "&suite_id=" + suiteId).getBody();
+
         JSONArray json;
 
         try {
@@ -304,6 +277,7 @@ public class TestRailClient {
 
     public Section addSection(String sectionName, int projectId, int suiteId, String parentId) 
             throws IOException, ElementNotFoundException, TestRailException {
+        //Section section = new Section();
         String payload = new JSONObject().put("name", sectionName).put("suite_id", suiteId).put("parent_id", parentId).toString();
         String body = httpPost("index.php?/api/v2/add_section/" + projectId , payload).getBody();
         JSONObject o = new JSONObject(body);
@@ -322,20 +296,7 @@ public class TestRailClient {
         return s;
     }
 
-    private Run createRunFromJson(JSONObject o) {
-        Run r = new Run();
-
-        r.setId(o.getInt("id") + "");
-        r.setSuiteId(o.getInt("suite_id") + "");
-        r.setName(o.getString("name"));
-        if (!o.isNull("milestone_id")) {
-            r.setMilestoneId(o.getInt("milestone_id") + "");
-        }
-
-        return r;
-    }
-
-    public Case addCase(Testcase caseToAdd, int sectionId) 
+    public Case addCase(TestCase caseToAdd, int sectionId) 
             throws IOException, TestRailException {
         JSONObject payload = new JSONObject().put("title", caseToAdd.getName());
         if (!StringUtils.isEmpty(caseToAdd.getRefs())) {
@@ -347,23 +308,13 @@ public class TestRailClient {
         return c;
     }
 
-    public TestRailResponse addResultsForCases(int runId, Results results, String extraParameters) 
+    public TestRailResponse addResultsForCases(int runId, TestRailResults results) 
             throws IOException, TestRailException {
         JSONArray a = new JSONArray();
         for (int i = 0; i < results.getResults().size(); i++) {
             JSONObject o = new JSONObject();
-            Result r = results.getResults().get(i);
+            TestRailResult r = results.getResults().get(i);
             o.put("case_id", r.getCaseId()).put("status_id", r.getStatus().getValue()).put("comment", r.getComment()).put("elapsed", r.getElapsedTimeString());
-
-            if (extraParameters.length() > 0) {
-                JSONObject xp = new JSONObject(extraParameters);
-                Iterator<String> keys = xp.keys();
-                while (keys.hasNext()) {
-                    String k = keys.next();
-                    o.put(k, xp.get(k).toString());
-                }
-            }
-
             a.put(o);
         }
 
@@ -406,15 +357,6 @@ public class TestRailClient {
          }
       }
       throw new ElementNotFoundException("Milestone id not found.");
-    }
-
-    public String getMilestoneName(String milestoneId, int projectId) throws IOException, ElementNotFoundException {
-      for (Milestone mstone: getMilestones(projectId)) {
-        if (mstone.getId() == milestoneId) {
-          return mstone.getName();
-        }
-      }
-      throw new ElementNotFoundException("Milestone " + milestoneId + " not found in Project " + projectId);
     }
 
     public boolean closeRun(int runId)

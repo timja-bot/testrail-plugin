@@ -16,27 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jenkinsci.plugins.testrail.JunitResults;
-
-import javax.xml.bind.annotation.XmlAttribute;
-import javax.xml.bind.annotation.XmlValue;
+package org.jenkinsci.plugins.testrail.TestRail;
 
 /**
- * Created by Adam Chevalier on 5/31/2018.
+ * Created by Adam 'xirsoi' Chevalier on 4/28/2017.
  */
-public class JunitError {
-    private String type;
-    private String message;
-    private String text;
+public class TestRailException extends Exception {
+    private static final long serialVersionUID = 9162568949904090503L;
 
-    @XmlAttribute
-    public void setType(String type) { this.type = type; }
-    @XmlAttribute
-    public void  setMessage(String message) { this.message = message; }
-    @XmlValue
-    public void setText(String text) { this.text = text; }
-
-    public String getType() { return this.type; }
-    public String getMessage() { return this.message; }
-    public String getText() { return this.text; }
+    public TestRailException(String message) {
+        super(message);
+    }
+    
+    public TestRailException(String message, Exception innerException) {
+        super(message, innerException);
+    }
 }
