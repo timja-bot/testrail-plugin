@@ -38,9 +38,9 @@ testRail(testrailProject: <Project ID>, testrailSuite: <Suite ID>,
 ```
 
 Developers
------
 
-This is a Maven project. You'll need the following in your ~/.m2/settings.xml.
+-----
+This is a Maven project. You'll need the following in your ~/.m2/settings.xml. As an alternative, the settings file from the repo can be used directly, with `mvn --setings settings.xml ...`
 
 ```xml
 <settings>
